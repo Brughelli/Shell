@@ -181,10 +181,10 @@ void eval(char *cmdline)
       sigprocmask(SIG_BLOCK, &mask, NULL);
       /* Child process. PID = 0. */
  
-      if((PID = fork()) == 0) 
+      if((PID = fork()) == 0) //if there has been a fork
       {
           sigprocmask(SIG_UNBLOCK, &mask, NULL);
-          setpgid(0, 0);
+          setpgid(0, 0); //set group ID to PID
           
           if(execv(argv[0], argv) < 0) 
           {
@@ -200,7 +200,7 @@ void eval(char *cmdline)
               if(addjob(jobs, PID, FG, cmdline)) 
               {
                   sigprocmask(SIG_UNBLOCK, &mask, NULL);
-                  waitfg(PID);
+                  waitfg(PID); //wait until PID is no longer associated with fg job
               }
           }
           else
@@ -274,9 +274,9 @@ void do_bgfg(char **argv)
         pid_t pid;
         int jid;
  
-        if(argv[1] == NULL) 
+        if(argv[1] == NULL) // ex -> ls -l.  -l is argv[1]
         {
-            printf("No argument found! \n");
+            printf("%s command requires PID or %%jobid argument \n");
             return;
         }
  
@@ -284,10 +284,10 @@ void do_bgfg(char **argv)
         if(argv[1][0] == '%') 
         {
            /* Argument begins with '%', so it's a JID. */
-           jid = atoi(&argv[1][1]);
-           job = getjobjid(jobs, jid);
+           jid = atoi(&argv[1][1]); // converts string to integer
+           job = getjobjid(jobs, jid); //get JID
  
-           if(job == NULL) 
+           if(job == NULL) //if JID is null
            {
                printf("%d: No such job \n", jid);
                return;
@@ -298,9 +298,9 @@ void do_bgfg(char **argv)
         {
             /* Argument begins with a digit, so it's a PID. */
             pid = atoi(argv[1]);
-            job = getjobpid(jobs, pid);
+            job = getjobpid(jobs, pid); //get PID
  
-            if(job == NULL) 
+            if(job == NULL) //if PID is null
             {
                 printf("(%d): No such process \n", pid);
                 return;
@@ -309,7 +309,7 @@ void do_bgfg(char **argv)
         
         else
         {
-            printf("Invalid argument! \n");
+            printf("%s: argument must be a PID or %%jobid \n");
             return;
         }
  
@@ -345,7 +345,7 @@ void do_bgfg(char **argv)
                 printf("An error has occurred in kill. \n");
             }
                 job->state = FG;
-                waitfg(pid);
+                waitfg(pid); //wait until pid is no longer associated with FG
         }
         
         return;
@@ -354,7 +354,7 @@ void do_bgfg(char **argv)
 /////////////////////////////////////////////////////////////////////////////
 //
 // waitfg - Block until process pid is no longer the foreground process
-//
+//wait until given pid is no longer associated with fg job
 void waitfg(pid_t pid)
 {
 	struct job_t *fgjob = getjobpid(jobs, pid);
@@ -387,21 +387,23 @@ void sigchld_handler(int sig)
 {
 	int pid, jid, status;
         struct job_t *fgjob = NULL;
- 
-        while((pid = waitpid(-1, &status, WNOHANG|WUNTRACED)) > 0) 
-        {
-            jid = pid2jid(pid);
-            if(WIFSTOPPED(status)) 
+         //waitpid(-1) means wait set consists of all the parent's child processes
+        while((pid = waitpid(-1, &status, WNOHANG|WUNTRACED)) > 0) //return immediately,
+        {   //with a return value of 0 if none of the children in wait set has stopped or
+            //terminated. OR with a return val equal to the PID of one of the stopped or 
+            //terminated children
+            jid = pid2jid(pid); // match PID w/ JID
+            if(WIFSTOPPED(status)) //returns True if child is stopped
             {
-                printf("Job [%d] (%d) stopped by signal 20. \n", jid, pid);
+                printf("Job [%d] (%d) stopped by signal %d. \n", jid, pid, sig);
                 fgjob = getjobpid(jobs, pid);
                 fgjob->state = ST;
             }
-            else if(deletejob(jobs, pid)) 
+            else if(deletejob(jobs, pid))  // reaped here
             {
-               if(WIFSIGNALED(status)) 
-               {
-                   printf("Job [%d] (%d) terminated by signal 2. \n", jid, pid);
+               if(WIFSIGNALED(status)) //returns true if child process terminated by
+               {                       //signal that was not caught
+                   printf("Job [%d] (%d) terminated by signal %d \n", jid, pid, sig);
                }
             }
         }
@@ -419,9 +421,9 @@ void sigint_handler(int sig)
 {
 	pid_t pid = 0;
  
-        if((pid = fgpid(jobs)) > 0) 
+        if((pid = fgpid(jobs)) > 0) // if there is child w/ PID = pid in wait set
         {
-            if(kill(-pid, sig) < 0) 
+            if(kill(-pid, sig) < 0) // if kill is unsuccessful
             {
                 printf("An error has occurred in kill. \n");
             }
